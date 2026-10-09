@@ -2,8 +2,6 @@ name: CI/CD Build & Release
 
 on:
   push:
-    branches:
-      - main
     tags:
       - 'v*'
   workflow_dispatch:
@@ -17,47 +15,67 @@ jobs:
       fail-fast: false
       matrix:
         include:
-          - platform: 'ubuntu-22.04'
-            args: ''
-          - platform: 'windows-latest'
-            args: ''
+          - platform: ubuntu-22.04
+            bundles: deb,appimage
+          - platform: windows-latest
+            bundles: nsis,msi
 
     runs-on: ${{ matrix.platform }}
     steps:
-      - name: Checkout repository
+      - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Install Node.js
+      - name: Install Node.js 20
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
+          cache: npm
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@stable
-        with:
-          targets: ${{ matrix.platform == 'ubuntu-22.04' && 'x86_64-unknown-linux-gnu' || '' }}
 
-      - name: Install Linux dependencies
+      - name: Rust cache
+        uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri -> target
+
+      - name: Install Linux system dependencies
         if: matrix.platform == 'ubuntu-22.04'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libwebkit2gtk-4.1-dev build-essential curl wget file libxdo-dev libssl-dev libayatana-appindicator3-dev librsvg2-dev
+          sudo apt-get install -y \
+            libwebkit2gtk-4.1-dev \
+            libayatana-appindicator3-dev \
+            librsvg2-dev \
+            libxdo-dev \
+            build-essential \
+            curl wget file
 
-      - name: Install dependencies
+      - name: Install npm dependencies
         run: npm ci
 
-      - name: Build frontend
-        run: npm run build
-
-      - name: Build Tauri app
+      - name: Build Tauri app & publish release
         uses: tauri-apps/tauri-action@v0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
-          tagName: v__VERSION__
-          releaseName: 'YT Downloader v__VERSION__'
-          releaseBody: 'See the assets to download the release for your platform.'
-          releaseDraft: true
+          tagName: ${{ github.ref_name }}
+          releaseName: YT Downloader ${{ github.ref_name }}
+          releaseBody: |
+            ## Встановлення
+
+            Перед запуском переконайтесь що встановлені `yt-dlp` та `ffmpeg`.
+
+            - **Linux (Arch):** `sudo pacman -S yt-dlp ffmpeg`
+            - **Linux (Ubuntu/Debian):** `sudo apt install yt-dlp ffmpeg`
+            - **Windows:** `winget install yt-dlp` та `winget install ffmpeg`
+
+            ## Файли
+
+            | Платформа | Файл |
+            |-----------|------|
+            | Linux | `.AppImage` (portable), `.deb` (Debian/Ubuntu) |
+            | Windows | `.exe` (NSIS installer), `.msi` (WiX installer) |
+          releaseDraft: false
           prerelease: false
-          args: ${{ matrix.args }}
+          args: --bundles ${{ matrix.bundles }}
