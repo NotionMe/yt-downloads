@@ -35,5 +35,13 @@
     ],
     "shortDescription": "YouTube video and audio downloader",
     "longDescription": "Desktop application for downloading YouTube videos and audio files with quality options."
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDZDNjMyMTREMjU3NzhCNUQKUldSZGkzY2xUU0ZqYkhjL2lGMjdId1dVSDZxbTVzZkpmUkNJazFXdkM3R0N3d2lQYTJ2L3pJOTkK",
+      "endpoints": [
+        "https://github.com/NotionMe/yt-downloads/releases/latest/download/latest.json"
+      ]
+    }
   }
 }
