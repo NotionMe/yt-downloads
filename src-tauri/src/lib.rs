@@ -2,6 +2,8 @@ use regex::Regex;
 use serde::{Deserialize, Serialize};
 use std::io::{BufRead, BufReader};
 use std::process::{Command, Stdio};
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
 use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 
@@ -69,6 +71,19 @@ pub struct DependencyStatus {
     pub ffmpeg_version: String,
 }
 
+// CREATE_NO_WINDOW — prevents a console window from flashing on Windows
+// when spawning yt-dlp, ffmpeg, explorer, etc.
+#[cfg(target_os = "windows")]
+const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+fn no_window_cmd(program: &str) -> Command {
+    #[cfg_attr(not(target_os = "windows"), allow(unused_mut))]
+    let mut cmd = Command::new(program);
+    #[cfg(target_os = "windows")]
+    cmd.creation_flags(CREATE_NO_WINDOW);
+    cmd
+}
+
 fn output_dir_or_default(output_dir: String) -> String {
     if output_dir.trim().is_empty() {
         #[cfg(target_os = "windows")]
@@ -89,7 +104,7 @@ fn output_dir_or_default(output_dir: String) -> String {
 }
 
 fn check_binary(name: &str, version_flag: &str) -> (bool, String) {
-    match Command::new(name).arg(version_flag).output() {
+    match no_window_cmd(name).arg(version_flag).output() {
         Ok(output) => {
             let version = String::from_utf8_lossy(&output.stdout)
                 .lines()
@@ -148,7 +163,7 @@ fn open_folder(path: String) -> Result<(), String> {
 
     #[cfg(target_os = "windows")]
     {
-        Command::new("explorer")
+        no_window_cmd("explorer")
             .arg(&p)
             .spawn()
             .map_err(|e| format!("Не вдалося відкрити папку: {}", e))?;
@@ -176,7 +191,7 @@ fn cancel_download(state: State<'_, AppState>) -> Result<(), String> {
         if let Some(pid) = lock.take() {
             #[cfg(target_os = "windows")]
             {
-                let _ = Command::new("taskkill")
+                let _ = no_window_cmd("taskkill")
                     .args(["/F", "/T", "/PID", &pid.to_string()])
                     .output();
             }
@@ -199,7 +214,7 @@ async fn get_video_info(url: String, browser: String) -> Result<VideoInfo, Strin
             return Err("Вкажіть посилання на відео".to_string());
         }
 
-        let mut cmd = Command::new("yt-dlp");
+        let mut cmd = no_window_cmd("yt-dlp");
         cmd.args([
             "--dump-json",
             "--no-warnings",
@@ -550,7 +565,7 @@ async fn download_video(
 
     args.push(url);
 
-    let mut child = Command::new("yt-dlp")
+    let mut child = no_window_cmd("yt-dlp")
         .args(&args)
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
